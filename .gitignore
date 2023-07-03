@@ -3,3 +3,5 @@ dist
 main.spec
 demo.py
 output
+stopwatch_timer.py
+.gitignore
