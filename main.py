@@ -102,7 +102,7 @@ class App:
         # Initially disable the Stop button
         self.stop_button.configure(state="disabled")
 
-        self.log_text = ctk.CTkTextbox(master, text_color='#20C20E', width=50, height=200)
+        self.log_text = ctk.CTkTextbox(master, width=50, height=200)
 
         # layout widgets
         self.app_label.grid(row=0, column=0, columnspan=5, sticky="nesw")
@@ -146,8 +146,8 @@ class App:
         threading.Thread(target=self.download).start()
 
     def download(self):
-        if self.log_text.get(tk.END, "end"):
-            self.log_text.delete(tk.END, "end")
+        if self.log_text.get('0.0', "end"):
+            self.log_text.delete('0.0', "end")
         # Update the status label
         self.status_label.configure(text="")
         self.stop_flags = False
