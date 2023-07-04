@@ -13,7 +13,6 @@ class App:
         # init vars
         self.process = None
         self.output_folder = "."
-        self.stop_flags = False
         # System settings
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
@@ -115,7 +114,7 @@ class App:
         #-----main frame-------#
         self.status_label.grid(row=3, column=0, columnspan=4, sticky="nesw")
         self.file_path.grid(row=4, column=0, columnspan=3, sticky="ew")
-        self.select_folder_button.grid(row=4, column=3, sticky="WE")
+        self.select_folder_button.grid(row=4, column=3, sticky="we")
         self.download_button.grid(row=5, column=0, columnspan=2, sticky="ew")
         self.stop_button.grid(row=5, column=2, columnspan=2, sticky="ew")
         self.log_text.grid(row=6, column=0, columnspan=4, sticky="nesw")
@@ -135,6 +134,17 @@ class App:
         #         master.focus()
         # master.bind("<Button-1>", reset_focus)
 
+    def reset_ui(self, state):
+        if state == 'stop':
+            self.select_folder_button.configure(state="normal")
+            self.download_button.configure(state="normal")
+            self.stop_button.configure(state="disabled")
+        else:
+            self.select_folder_button.configure(state="disabled")
+            self.download_button.configure(state="disabled")
+            self.stop_button.configure(state="normal")
+
+
     def select_output_folder(self):
         self.output_folder = filedialog.askdirectory()
         self.file_path.configure(state="normal")  # configure textbox to be read-only
@@ -146,82 +156,76 @@ class App:
         threading.Thread(target=self.download).start()
 
     def download(self):
+        # Clear the logging text
         if self.log_text.get('0.0', "end"):
             self.log_text.delete('0.0', "end")
         # Update the status label
         self.status_label.configure(text="")
-        self.stop_flags = False
-        while not self.stop_flags:
-            # Get the link entered by the user
-            link = self.link.get().strip()
-            file_name = self.input_file_name.get().strip()
 
-            if len(link) == 0 or len(file_name) == 0:
-                # Update the status label
-                self.status_label.configure(
-                    text="Please insert a valid link and file name!",
-                    text_color="#C73E1D",
-                )
-                break
+        # Get the link entered by the user
+        link = self.link.get().strip()
+        file_name = self.input_file_name.get().strip()
 
-            # Construct the ffmpeg command to download the video file
-            output_file = os.path.join(self.output_folder, f"{file_name}.mp4")
-            # Check if the file already exists
-            if Path(output_file).is_file():
-                # Update the status label
-                self.status_label.configure(
-                    text="The file is already exists!", text_color="orange"
-                )
-                break
-
-            command = f'ffmpeg -hide_banner -headers "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36)" -n -i {link} -c copy -bsf:a aac_adtstoasc -c:v copy {output_file}'
-            # Start the ffmpeg process to download the video file
-            self.process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-                shell=True,
+        if len(link) == 0 or len(file_name) == 0:
+            # Update the status label
+            self.status_label.configure(
+                text="Please insert a valid url and file name!",
+                text_color="#C73E1D",
             )
-            # Disable the start download button and enable the stop download button
-            self.download_button.configure(state="disabled")
-            self.stop_button.configure(state="normal")
-            self.select_folder_button.configure(state="disabled")
+            return
 
-            while True:
-                output = self.process.stdout.readline()
-                if "No such file or directory" in output.decode("utf-8"):
-                    # Update the status label
-                    self.status_label.configure(
-                        text="The link is invalid!", text_color="#C73E1D"
-                    )
-                    break
-                if output == b"" and self.process.poll() is not None:
-                    # finished the download
-                    # self.stop_flags = True
-                    # Update the status label
-                    self.status_label.configure(
-                        text="Download Complete!", text_color="green"
-                    )
-                    break
-                if output:
-                    self.log_text.insert(
-                        tk.END, output.decode("utf-8")
-                    )  # reads the output from the pipe line by line and appends it to the Text widget
-                    self.log_text.see(
-                        tk.END
-                    )  # stays scrolled to the end to show the most recent output
-                    root.update_idletasks()  # allows the GUI to update in real-time.
+        # Construct the ffmpeg command to download the video file
+        output_file = os.path.join(self.output_folder, f"{file_name}.mp4")
+        # Check if the file already exists
+        if Path(output_file).is_file():
+            # Update the status label
+            self.status_label.configure(
+                text="The file is already exists!", text_color="orange"
+            )
+            return
+
+        command = f'ffmpeg -hide_banner -headers "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36)" -n -i {link} -c copy -bsf:a aac_adtstoasc -c:v copy {output_file}'
+        # Start the ffmpeg process to download the video file
+        self.process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            shell=True,
+        )
+        output = self.process.stdout.readline()
+        if "No such file or directory" in output.decode("utf-8"):
+            # Update the status label
+            self.status_label.configure(
+                text="The url is invalid!", text_color="#C73E1D"
+            )
+            return
+
+        # Disable the start download button and enable the stop download button
+        self.reset_ui('')
+
+        while True:
+            output = self.process.stdout.readline()
+            if output:
+                self.log_text.insert(
+                    tk.END, output.decode("utf-8")
+                )  # reads the output from the pipe line by line and appends it to the Text widget
+                self.log_text.see(
+                    tk.END
+                )  # stays scrolled to the end to show the most recent output
+                root.update_idletasks()  # allows the GUI to update in real-time.
+            if output == b"" and self.process.poll() is not None:
+                # Update the status label
+                self.status_label.configure(
+                    text="Download Complete!", text_color="green"
+                )
+                self.reset_ui('stop')
+                return
 
     def stop_download(self):
-        # Update the status label
-        self.status_label.configure(text="Download stopped.", text_color="orange")
         # Reset the UI
-        self.download_button.configure(state="normal")
-        self.stop_button.configure(state="disabled")
-        self.select_folder_button.configure(state="normal")
+        self.reset_ui('stop')
 
-        self.stop_flags = True
         try:
             # Terminate the process gracefully
             # os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)
