@@ -1,3 +1,4 @@
+import time
 import tkinter as tk
 import customtkinter as ctk
 import os
@@ -11,6 +12,9 @@ from pathlib import Path
 class App:
     def __init__(self, master):
         # init vars
+        self.timer_running = False
+        self.start_time = 0
+        self.elapsed_time = 0
         self.process = None
         self.output_folder = "."
         # System settings
@@ -134,6 +138,30 @@ class App:
         #         master.focus()
         # master.bind("<Button-1>", reset_focus)
 
+    def update_timer(self):
+        if self.timer_running:
+            self.elapsed_time = time.time() - self.start_time
+        minutes, seconds = divmod(self.elapsed_time, 60)
+        hours, minutes = divmod(minutes, 60)
+
+        time_string = "{:02d}:{:02d}:{:02d}".format(int(hours), int(minutes), int(seconds))
+        if self.timer_running:
+            self.download_button.configure(text=time_string, text_color_disabled='#ffffff')
+
+        self.master.after(1000, self.update_timer)
+
+    def start_timer(self):
+        if not self.timer_running:
+            self.start_time = time.time() - self.elapsed_time
+            self.timer_running = True
+
+    def stop_timer(self):
+        if self.timer_running:
+            self.timer_running = False
+            self.start_time = 0
+            self.elapsed_time = 0
+            self.download_button.configure(text="Download")
+
     def reset_ui(self, state):
         if state == 'stop':
             self.select_folder_button.configure(state="normal")
@@ -144,7 +172,6 @@ class App:
             self.download_button.configure(state="disabled")
             self.stop_button.configure(state="normal")
 
-
     def select_output_folder(self):
         self.output_folder = filedialog.askdirectory()
         self.file_path.configure(state="normal")  # configure textbox to be read-only
@@ -153,6 +180,7 @@ class App:
         self.file_path.configure(state="disabled")
 
     def start_download(self):
+        self.update_timer()
         threading.Thread(target=self.download).start()
 
     def download(self):
@@ -203,6 +231,7 @@ class App:
 
         # Disable the start download button and enable the stop download button
         self.reset_ui('')
+        self.start_timer()
 
         while True:
             output = self.process.stdout.readline()
@@ -219,10 +248,12 @@ class App:
                 self.status_label.configure(
                     text="Download Complete!", text_color="green"
                 )
+                self.stop_timer()
                 self.reset_ui('stop')
                 return
 
     def stop_download(self):
+        self.stop_timer()
         # Reset the UI
         self.reset_ui('stop')
 
@@ -233,7 +264,7 @@ class App:
             self.process.send_signal(signal.CTRL_BREAK_EVENT)
             # self.process.terminate()
             # self.process.wait()  # Wait for termination
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, AttributeError):
             # Handle any exceptions if the termination fails
             pass
 
