@@ -29,7 +29,7 @@ class App:
         master.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="equal")
 
         master.resizable(False, False)
-        master.iconbitmap(r"D:\Playground\m3u8-dl\octopus_logo.ico")
+        master.iconbitmap(r"D:\Playground\m3u8-dl-py\octopus_logo.ico")
         master.title("M3U8 Downloader - dngtnv")
 
         self.app_label = ctk.CTkLabel(
@@ -235,6 +235,14 @@ class App:
 
         while True:
             output = self.process.stdout.readline()
+            if "403" in output.decode('utf-8'):
+                # Update the status label
+                self.status_label.configure(
+                    text="403 Forbidden (access denied)", text_color="#C73E1D"
+                )
+                self.stop_timer()
+                self.reset_ui('stop')
+                return
             if output:
                 self.log_text.insert(
                     tk.END, output.decode("utf-8")
