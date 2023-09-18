@@ -8,7 +8,6 @@ import threading
 import signal
 from pathlib import Path
 
-
 class App:
     def __init__(self, master):
         # init vars
@@ -41,12 +40,12 @@ class App:
         self.input_frame.columnconfigure(1, weight=6)
 
         # Create a text box for the user to enter the m3u8 link
-        self.link_label = ctk.CTkLabel(
+        self.url_label = ctk.CTkLabel(
             self.input_frame,
             text="Enter m3u8 url",
             font=("Arial", 14),
         )
-        self.link = ctk.CTkEntry(
+        self.url = ctk.CTkEntry(
             self.input_frame,
             height=38,
             font=("Arial", 14),
@@ -111,8 +110,8 @@ class App:
         self.app_label.grid(row=0, column=0, columnspan=5, sticky="nesw")
         self.input_frame.grid(row=1, column=0, columnspan=5, sticky="nesw")
         #-----input frame------#
-        self.link_label.grid(row=0, column=0, sticky="ew")
-        self.link.grid(row=0, column=1, sticky="ew")
+        self.url_label.grid(row=0, column=0, sticky="ew")
+        self.url.grid(row=0, column=1, sticky="ew")
         self.file_label.grid(row=1, column=0, sticky="ew")
         self.input_file_name.grid(row=1, column=1, sticky="ew")
         #-----main frame-------#
@@ -128,15 +127,6 @@ class App:
 
         for widget in master.winfo_children():
             widget.grid_configure(pady=5, padx=10)
-
-        # def reset_focus():
-        #     x,y = master.winfo_pointerxy()
-        #     widget = master.winfo_containing(x,y)
-        #     if (widget == self.link) != False :
-        #         print(widget)
-        #         print(self.link)
-        #         master.focus()
-        # master.bind("<Button-1>", reset_focus)
 
     def update_timer(self):
         if self.timer_running:
@@ -180,28 +170,23 @@ class App:
         self.file_path.configure(state="disabled")
 
     def start_download(self):
-        self.update_timer()
-        threading.Thread(target=self.download).start()
-
-    def download(self):
+        # Update the status label
+        self.status_label.configure(text="")
         # Clear the logging text
         if self.log_text.get('0.0', "end"):
             self.log_text.delete('0.0', "end")
-        # Update the status label
-        self.status_label.configure(text="")
 
-        # Get the link entered by the user
-        link = self.link.get().strip()
+        # Get the url entered by the user
+        url = self.url.get().strip()
         file_name = self.input_file_name.get().strip()
 
-        if len(link) == 0 or len(file_name) == 0:
+        if len(url) == 0 or len(file_name) == 0:
             # Update the status label
             self.status_label.configure(
                 text="Please insert a valid url and file name!",
                 text_color="#C73E1D",
             )
             return
-
         # Construct the ffmpeg command to download the video file
         output_file = os.path.join(self.output_folder, f"{file_name}.mp4")
         # Check if the file already exists
@@ -211,9 +196,12 @@ class App:
                 text="The file is already exists!", text_color="orange"
             )
             return
+        self.update_timer()
+        threading.Thread(target=self.download, args=(url, output_file)).start()
 
-        command = f'ffmpeg -hide_banner -headers "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36)" -n -i {link} -c copy -bsf:a aac_adtstoasc -c:v copy {output_file}'
-        # Start the ffmpeg process to download the video file
+    def download(self, url, output_file):
+        command = f'ffmpeg -hide_banner -headers "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36)" -n -i {url} -c copy -bsf:a aac_adtstoasc -c:v copy {output_file}'
+        # Start the ffmpeg process to download the video
         self.process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
@@ -221,15 +209,15 @@ class App:
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
             shell=True,
         )
+
         output = self.process.stdout.readline()
-        if "No such file or directory" in output.decode("utf-8"):
+        if "No such file or directory" in output.decode('utf-8'):
             # Update the status label
             self.status_label.configure(
                 text="The url is invalid!", text_color="#C73E1D"
             )
             return
 
-        # Disable the start download button and enable the stop download button
         self.reset_ui('')
         self.start_timer()
 
@@ -240,17 +228,17 @@ class App:
                 self.status_label.configure(
                     text="403 Forbidden (access denied)", text_color="#C73E1D"
                 )
-                self.stop_timer()
-                self.reset_ui('stop')
-                return
+                self.stop_download()
+                break
+
             if output:
-                self.log_text.insert(
-                    tk.END, output.decode("utf-8")
-                )  # reads the output from the pipe line by line and appends it to the Text widget
-                self.log_text.see(
-                    tk.END
-                )  # stays scrolled to the end to show the most recent output
-                root.update_idletasks()  # allows the GUI to update in real-time.
+                # reads the output from the pipe line by line and appends it to the Text widget
+                self.log_text.insert(tk.END, output.decode('utf-8'))
+                # stays scrolled to the end to show the most recent output
+                self.log_text.see(tk.END)
+                # allows the GUI to update in real-time.
+                root.update_idletasks()
+
             if output == b"" and self.process.poll() is not None:
                 # Update the status label
                 self.status_label.configure(
@@ -258,24 +246,17 @@ class App:
                 )
                 self.stop_timer()
                 self.reset_ui('stop')
-                return
+                break
 
     def stop_download(self):
-        self.stop_timer()
-        # Reset the UI
-        self.reset_ui('stop')
-
-        try:
-            # Terminate the process gracefully
-            # os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)
-            # subprocess.run("TASKKILL /PID {pid} /T".format(pid=self.process.pid))
-            self.process.send_signal(signal.CTRL_BREAK_EVENT)
-            # self.process.terminate()
-            # self.process.wait()  # Wait for termination
-        except (KeyboardInterrupt, AttributeError):
-            # Handle any exceptions if the termination fails
-            pass
-
+        if self.process:
+            try:
+                self.process.send_signal(signal.CTRL_BREAK_EVENT)
+                self.stop_timer()
+                self.reset_ui('stop')
+            except Exception as e:
+                print(f"Error stopping ffmpeg: {e}")
+                pass
 
 if __name__ == "__main__":
     root = ctk.CTk()
