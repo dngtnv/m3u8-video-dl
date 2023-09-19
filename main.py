@@ -5,7 +5,6 @@ import os
 import subprocess
 from tkinter import filedialog
 import threading
-import signal
 from pathlib import Path
 
 class App:
@@ -188,7 +187,7 @@ class App:
             )
             return
         # Construct the ffmpeg command to download the video file
-        output_file = os.path.join(self.output_folder, f"{file_name}.mp4")
+        output_file = os.path.join(self.output_folder, f"{file_name}.mkv")
         # Check if the file already exists
         if Path(output_file).is_file():
             # Update the status label
@@ -251,11 +250,12 @@ class App:
     def stop_download(self):
         if self.process:
             try:
-                self.process.send_signal(signal.CTRL_BREAK_EVENT)
+                #self.process.terminate()
+                subprocess.run(['START', '/B', 'taskkill', '/F', '/T', '/PID', str(self.process.pid)], shell=True)
                 self.stop_timer()
                 self.reset_ui('stop')
             except Exception as e:
-                print(f"Error stopping ffmpeg: {e}")
+                #print(f"Error stopping ffmpeg: {e}")
                 pass
 
 if __name__ == "__main__":
